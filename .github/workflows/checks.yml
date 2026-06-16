@@ -17,7 +17,11 @@ jobs:
             os: windows-latest
           - node-version: 18
             os: ubuntu-latest
+        include:
+          - node-version: 26
+            experimental: true
 
+    continue-on-error: ${{ matrix.experimental == true }}
     runs-on: ${{ matrix.os }}
 
     steps:
