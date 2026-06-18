@@ -7,7 +7,22 @@ on:
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        node-version: [18, 24, 26]
+        os: [ubuntu-latest, windows-latest]
+        exclude:
+          - node-version: 18
+            os: windows-latest
+          - node-version: 18
+            os: ubuntu-latest
+        include:
+          - node-version: 26
+            experimental: true
+
+    continue-on-error: ${{ matrix.experimental == true }}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
@@ -16,7 +31,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: "yarn"
 
       - name: Install dependencies
