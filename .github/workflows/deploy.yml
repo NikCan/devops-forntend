@@ -25,8 +25,12 @@ jobs:
             cd /var/www/lesson
             docker compose up --build -d frontend
 
+  notify:
+    needs: [checks, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
       - name: Notify Telegram
-        if: always()
         run: |
           STATUS="${{ job.status }}"
           if [ "$STATUS" = "success" ]; then
