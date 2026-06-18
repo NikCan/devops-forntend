@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Notify Telegram
         run: |
-          CHEKS="${{ needs.checks.result }}"
+          CHECKS="${{ needs.checks.result }}"
           DEPLOY="${{ needs.deploy.result }}"
 
           if [ "$CHECKS" != "success" ]; then
