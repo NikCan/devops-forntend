@@ -1,0 +1,41 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Code Checks
+    uses: ./.github/workflows/checks.yml
+
+  build:
+    name: Build Image
+    needs: [checks]
+    uses: ./.github/workflows/build.yml
+    with:
+      image_name: "devops-frontend"
+      vite_api_url: ${{ vars.VITE_API_URL }}
+    secrets: inherit
+
+  deploy:
+    name: Deploy to Production
+    needs: [build]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      image_name: "devops-frontend"
+      deploy_dir: "/var/www/lesson"
+      compose_service: "frontend"
+      env_image_var: "FRONTEND_IMAGE"
+    secrets: inherit
+
+  notify:
+    name: Send Notification
+    needs: [checks, build, deploy]
+    if: always()
+    uses: ./.github/workflows/notify.yml
+    with:
+      checks_result: ${{ needs.checks.result }}
+      build_result: ${{ needs.build.result }}
+      deploy_result: ${{ needs.deploy.result }}
+    secrets: inherit
