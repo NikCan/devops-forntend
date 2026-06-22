@@ -1,48 +1,56 @@
-name: Deploy
+name: Deploy Template
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Имя Docker-образа (без юзернейма, например: devops-backend)'
+        required: true
+        type: string
+      deploy_dir:
+        description: 'Путь к директории проекта на сервере'
+        required: true
+        type: string
+      compose_service:
+        description: 'Имя сервиса в docker-compose.yml'
+        required: true
+        type: string
+      env_image_var:
+        description: 'Переменная окружения для замены в .env файле'
+        required: true
+        type: string
+    secrets:
+      DOCKER_USER:
+        required: true
+      SSH_HOST:
+        required: true
+      SSH_USER:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: true
 
 jobs:
-  checks:
-    uses: ./.github/workflows/checks.yml
-
-  deploy:
-    needs: checks
+  deploy_to_server:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          # Формируем целевой образ, опираясь на параметры и глобальный хэш коммита
+          TARGET_IMAGE: ${{ secrets.DOCKER_USER }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+          ENV_VAR_NAME: ${{ inputs.env_image_var }}
+          DEPLOY_DIR: ${{ inputs.deploy_dir }}
+          COMPOSE_SERVICE: ${{ inputs.compose_service }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: TARGET_IMAGE, ENV_VAR_NAME, DEPLOY_DIR, COMPOSE_SERVICE
           script: |
-            cd /var/www/lesson/frontend
-            git pull origin main
-            cd /var/www/lesson
-            docker compose up --build -d frontend
-
-  notify:
-    needs: [checks, deploy]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Notify Telegram
-        run: |
-          CHECKS="${{ needs.checks.result }}"
-          DEPLOY="${{ needs.deploy.result }}"
-
-          if [ "$CHECKS" != "success" ]; then
-            TEXT="❌ Тесты упали%0A${{ github.repository }} @ ${{ github.ref_name }}%0AСмотри: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          elif [ "$DEPLOY" != "success" ]; then
-            TEXT="❌ Деплой упал%0A${{ github.repository }} @ ${{ github.ref_name }}%0AСмотри: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
-            TEXT="✅ Деплой успешен%0A${{ github.repository }} @ ${{ github.ref_name }} | author: ${{ github.actor }}"
-          fi
-
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=$TEXT"
+            cd $DEPLOY_DIR
+            
+            # Обновляем тег образа в .env файле
+            sed -i "s|^${ENV_VAR_NAME}=.*|${ENV_VAR_NAME}=${TARGET_IMAGE}|" .env
+            
+            # Перезапускаем только обновленный сервис
+            docker compose up -d --no-deps $COMPOSE_SERVICE
