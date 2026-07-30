@@ -1,10 +1,10 @@
 # Stage 1: сборка React/Vite
 FROM node:24-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN yarn build
 
 # Stage 2: nginx
 FROM nginx:alpine
