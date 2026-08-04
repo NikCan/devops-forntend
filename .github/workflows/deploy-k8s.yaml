@@ -15,6 +15,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       image_name: "devops-frontend"
+      vite_api_url: ${{ vars.VITE_API_URL }}
     secrets: inherit
 
   deploy:

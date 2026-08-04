@@ -6,16 +6,7 @@ interface Todo {
   completed: boolean;
 }
 
-// Получаем API_URL из глобального window.APP_CONFIG (Runtime Config)
-declare global {
-  interface Window {
-    APP_CONFIG?: {
-      API_URL?: string;
-    };
-  }
-}
-
-const API_BASE = window.APP_CONFIG?.API_URL || 'http://localhost:3001/api/todos';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/todos';
 
 export default function App() {
   const [todos, setTodos] = useState<Todo[]>([]);
