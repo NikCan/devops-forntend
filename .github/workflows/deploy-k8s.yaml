@@ -1,0 +1,50 @@
+name: Deploy k8s
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  checks:
+    name: Code Checks
+    uses: ./.github/workflows/checks.yml
+
+  build:
+    name: Build Image
+    needs: [checks]
+    uses: ./.github/workflows/build.yml
+    with:
+      image_name: "devops-frontend"
+    secrets: inherit
+
+  deploy:
+    name: Deploy to Production
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy to k3s
+        env:
+          FRONTEND_IMAGE: ${{ secrets.DOCKER_USER }}/devops-frontend:sha-${{ github.sha }}
+        run: |
+          envsubst < k8s/frontend.yaml | kubectl apply -f -
+          kubectl annotate deployment/frontend-lesson kubernetes.io/change-cause="sha-${{ github.sha }}" --overwrite
+          kubectl rollout status deployment/frontend-lesson --timeout=120s
+
+  notify:
+    name: Send Notification
+    needs: [checks, build, deploy]
+    if: always()
+    uses: ./.github/workflows/notify.yml
+    with:
+      checks_result: ${{ needs.checks.result }}
+      build_result: ${{ needs.build.result }}
+      deploy_result: ${{ needs.deploy.result }}
+    secrets: inherit

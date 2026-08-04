@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-lesson
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-lesson
+  template:
+    metadata:
+      labels:
+        app: frontend-lesson
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-cred
+      containers:
+        - name: frontend-lesson
+          image: ${FRONTEND_IMAGE}
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config-volume
+              mountPath: /usr/share/nginx/html/config.js
+              subPath: config.js
+      volumes:
+        - name: config-volume
+          configMap:
+            name: frontend-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-lesson-service
+spec:
+  selector:
+    app: frontend-lesson
+  ports:
+    - port: 8080
+      targetPort: 80
+  type: ClusterIP

@@ -4,8 +4,8 @@ on:
   # Вызывается из главного пайплайна (push в main)
   workflow_call:
   # Запускается автоматически при создании Pull Request в main
-  pull_request:
-    branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 jobs:
   run_checks:

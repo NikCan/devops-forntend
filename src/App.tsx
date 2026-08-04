@@ -80,8 +80,11 @@ export default function App() {
   return (
     <div className="container">
       <div className="header">
-        <h1 className="title">K8s Task Tracker</h1>
-        <span className="badge">PostgreSQL Connected</span>
+        <h1 className="title">K3s Task Tracker 🚀</h1>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <span className="badge">K3s & Ingress</span>
+          <span className="badge">PostgreSQL</span>
+        </div>
       </div>
 
       <form className="form" onSubmit={addTodo}>
