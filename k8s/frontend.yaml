@@ -17,6 +17,14 @@ spec:
       containers:
         - name: frontend-lesson
           image: ${FRONTEND_IMAGE}
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "50Mi"
+            limits:
+              cpu: "60m"
+              memory: "60Mi"
+
           ports:
             - containerPort: 80
 ---
