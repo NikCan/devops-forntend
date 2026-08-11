@@ -30,14 +30,19 @@ jobs:
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+      - name: Install Helm
+        uses: azure/setup-helm@v4
 
-      - name: Deploy to k3s
+      - name: Deploy with Helm
         env:
           FRONTEND_IMAGE: ${{ secrets.DOCKER_USER }}/devops-frontend:sha-${{ github.sha }}
         run: |
-          envsubst < k8s/frontend.yaml | kubectl apply -f -
-          kubectl annotate deployment/frontend-lesson kubernetes.io/change-cause="sha-${{ github.sha }}" --overwrite
-          kubectl rollout status deployment/frontend-lesson --timeout=120s
+          helm upgrade --install frontend-lesson ./helm/frontend-lesson \
+          --namespace lesson \
+          --reuse-values \
+          --set image="$FRONTEND_IMAGE" \
+          --wait \
+          --timeout 4m
 
   notify:
     name: Send Notification

@@ -1,0 +1,22 @@
+name: frontend-lesson
+replicas: 1
+
+image: "nikitagaponov/devops-frontend:latest"
+imagePullSecret: "dockerhub-cred"
+
+service:
+  port: 8080
+  targetPort: 80
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "50Mi"
+  limits:
+    cpu: "60m"
+    memory: "60Mi"
+
+ingress:
+  host: lesson.nik-can-dev.quest
+  tlsSecret: lesson-tls
+  clusterIssuer: letsencrypt-prod
