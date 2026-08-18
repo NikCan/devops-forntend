@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       image_name:
-        description: 'Имя Docker-образа (без юзернейма, например: my-app)'
+        description: "Имя Docker-образа (без юзернейма, например: my-app)"
         required: true
         type: string
       vite_api_url:
-        description: 'URL API для фронтенда (Vite build arg)'
+        description: "URL API для фронтенда (Vite build arg)"
         required: false
         type: string
     # Явно объявляем ожидаемые секреты
@@ -17,10 +17,17 @@ on:
         required: true
       DOCKER_PASS:
         required: true
+    # 1. Объявляем выходные данные для всего workflow
+    outputs:
+      image_sha:
+        description: "Тег собранного образа"
+        value: ${{ jobs.build_image.outputs.image_sha }}
 
 jobs:
   build_image:
     runs-on: ubuntu-latest
+    outputs:
+      image_sha: ${{ steps.build_step.outputs.image-sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,13 +39,17 @@ jobs:
           password: ${{ secrets.DOCKER_PASS }}
 
       - name: Build and push image
+        id: build_step
         env:
           IMAGE_BASE: ${{ secrets.DOCKER_USER }}/${{ inputs.image_name }}
+          IMAGE_TAG: sha-${{ github.sha }} # <--- Вынесли в переменную!
           VITE_API_URL: ${{ inputs.vite_api_url }}
         run: |
           docker build \
             --build-arg VITE_API_URL="$VITE_API_URL" \
-            -t $IMAGE_BASE:sha-${{ github.sha }} \
+            -t $IMAGE_BASE:$IMAGE_TAG \
             -t $IMAGE_BASE:latest .
-          docker push $IMAGE_BASE:sha-${{ github.sha }}
+          docker push $IMAGE_BASE:$IMAGE_TAG
           docker push $IMAGE_BASE:latest
+
+          echo "image-sha=$IMAGE_TAG" >> "$GITHUB_OUTPUT"

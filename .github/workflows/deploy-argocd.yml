@@ -1,0 +1,107 @@
+on:
+  workflow_call:
+    inputs:
+      helm_path:
+        description: Путь к values.yaml внутри gitops-репо
+        type: string
+        required: true
+      image_name:
+        description: Полное имя образа с тегом
+        type: string
+        required: true
+      branch:
+        description: Целевая ветка в gitops-репо
+        type: string
+        required: true
+      gitops_repo:
+        description: owner/repo gitops-репозитория
+        type: string
+        required: true
+      argocd_app_name:
+        description: Имя Application в ArgoCD
+        type: string
+        required: true
+      argocd_server:
+        description: Адрес ArgoCD сервера
+        type: string
+        required: true
+    secrets:
+      gitops_token:
+        description: GitHub Token с правом на запись в gitops-репо
+        required: true
+      argocd_auth_token:
+        description: ArgoCD auth token
+        required: true
+
+jobs:
+  update-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitOps Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.gitops_repo }}
+          token: ${{ secrets.gitops_token }}
+          ref: ${{ inputs.branch }}
+          path: gitops-repo
+
+      - name: Install yq
+        run: |
+          mkdir -p $HOME/.local/bin
+          curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+            -o $HOME/.local/bin/yq
+          chmod +x $HOME/.local/bin/yq
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Update values.yaml
+        run: |
+          cd gitops-repo
+          yq e -i ".image.tag = \"${{ inputs.image_name }}\"" "${{ inputs.helm_path }}"
+
+      - name: Commit and push to new branch
+        run: |
+          cd gitops-repo
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          BRANCH_NAME="update-image-${{ github.run_id }}"
+          git checkout -b "$BRANCH_NAME"
+          git add "${{ inputs.helm_path }}"
+          git commit -m "feat(${{ inputs.argocd_app_name }}): update image to ${{ inputs.image_name }}"
+          git push origin "$BRANCH_NAME"
+
+      - name: Create and merge Pull Request
+        run: |
+          response=$(curl -sX POST \
+            -H "Authorization: Bearer ${{ secrets.gitops_token }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ inputs.gitops_repo }}/pulls \
+            -d "{
+              \"title\": \"[${{ inputs.argocd_app_name }}] Update image to ${{ inputs.image_name }}\",
+              \"body\": \"Automated update of image tag.\",
+              \"head\": \"update-image-${{ github.run_id }}\",
+              \"base\": \"${{ inputs.branch }}\"
+            }")
+
+          PR_NUMBER=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['number'])")
+
+          curl -sX PUT \
+            -H "Authorization: Bearer ${{ secrets.gitops_token }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ inputs.gitops_repo }}/pulls/$PR_NUMBER/merge \
+            -d '{"merge_method": "squash"}'
+
+  sync-argocd:
+    needs: [update-helm-chart]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install ArgoCD CLI & Sync
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.argocd_auth_token }}
+          ARGOCD_SERVER: ${{ inputs.argocd_server }}
+        run: |
+          sudo curl -sSL -o /usr/local/bin/argocd \
+            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo chmod +x /usr/local/bin/argocd
+
+          argocd app sync ${{ inputs.argocd_app_name }} --insecure
+          argocd app wait ${{ inputs.argocd_app_name }} --insecure

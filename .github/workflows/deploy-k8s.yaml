@@ -21,28 +21,17 @@ jobs:
   deploy:
     name: Deploy to Production
     needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure kubectl
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-
-      - name: Deploy with Helm
-        env:
-          FRONTEND_IMAGE: ${{ secrets.DOCKER_USER }}/devops-frontend:sha-${{ github.sha }}
-        run: |
-          helm upgrade --install frontend-lesson ./helm/frontend-lesson \
-          --namespace lesson \
-          --reuse-values \
-          --set image="$FRONTEND_IMAGE" \
-          --wait \
-          --timeout 4m
+    uses: ./.github/workflows/deploy-argocd.yml
+    with:
+      helm_path: HelmCharts/frontend-lesson/values-production.yaml
+      image_name: ${{ needs.build.outputs.image_sha }}
+      branch: main # ветка argocd-lesson
+      gitops_repo: nikcan/argocd-lesson
+      argocd_app_name: frontend-lesson
+      argocd_server: ${{ vars.ARGOCD_SERVER }}
+    secrets:
+      gitops_token: ${{ secrets.GITOPS_TOKEN }}
+      argocd_auth_token: ${{ secrets.ARGOCD_AUTH_TOKEN }}
 
   notify:
     name: Send Notification
