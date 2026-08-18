@@ -70,25 +70,21 @@ jobs:
           git push origin "$BRANCH_NAME"
 
       - name: Create and merge Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.gitops_token }}
         run: |
-          response=$(curl -sX POST \
-            -H "Authorization: Bearer ${{ secrets.gitops_token }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ inputs.gitops_repo }}/pulls \
-            -d "{
-              \"title\": \"[${{ inputs.argocd_app_name }}] Update image to ${{ inputs.image_name }}\",
-              \"body\": \"Automated update of image tag.\",
-              \"head\": \"update-image-${{ github.run_id }}\",
-              \"base\": \"${{ inputs.branch }}\"
-            }")
+          cd gitops-repo
+          PR_URL=$(gh pr create \
+            --repo "${{ inputs.gitops_repo }}" \
+            --title "[${{ inputs.argocd_app_name }}] Update image to ${{ inputs.image_name }}" \
+            --body "Automated update of image tag." \
+            --base "${{ inputs.branch }}" \
+            --head "update-image-${{ github.run_id }}")
 
-          PR_NUMBER=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['number'])")
+          echo "PR created: $PR_URL"
 
-          curl -sX PUT \
-            -H "Authorization: Bearer ${{ secrets.gitops_token }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ inputs.gitops_repo }}/pulls/$PR_NUMBER/merge \
-            -d '{"merge_method": "squash"}'
+          gh pr merge "$PR_URL" --repo "${{ inputs.gitops_repo }}" --squash --delete-branch
+
 
   sync-argocd:
     needs: [update-helm-chart]
