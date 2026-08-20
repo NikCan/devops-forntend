@@ -54,36 +54,49 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Update values.yaml
+        env:
+          IMAGE_NAME: ${{ inputs.image_name }}
+          HELM_PATH: ${{ inputs.helm_path }}
         run: |
           cd gitops-repo
-          yq e -i ".image.tag = \"${{ inputs.image_name }}\"" "${{ inputs.helm_path }}"
+          yq e -i ".image.tag = \"$IMAGE_NAME\"" "$HELM_PATH"
 
       - name: Commit and push to new branch
+        env:
+          HELM_PATH: ${{ inputs.helm_path }}
+          APP_NAME: ${{ inputs.argocd_app_name }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           cd gitops-repo
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
-          BRANCH_NAME="update-image-${{ github.run_id }}"
+          BRANCH_NAME="update-image-$RUN_ID"
           git checkout -b "$BRANCH_NAME"
-          git add "${{ inputs.helm_path }}"
-          git commit -m "feat(${{ inputs.argocd_app_name }}): update image to ${{ inputs.image_name }}"
+          git add "$HELM_PATH"
+          git commit -m "feat($APP_NAME): update image to $IMAGE_NAME"
           git push origin "$BRANCH_NAME"
 
       - name: Create and merge Pull Request
         env:
           GH_TOKEN: ${{ secrets.gitops_token }}
+          GITOPS_REPO: ${{ inputs.gitops_repo }}
+          APP_NAME: ${{ inputs.argocd_app_name }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          BRANCH: ${{ inputs.branch }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           cd gitops-repo
           PR_URL=$(gh pr create \
-            --repo "${{ inputs.gitops_repo }}" \
-            --title "[${{ inputs.argocd_app_name }}] Update image to ${{ inputs.image_name }}" \
+            --repo "$GITOPS_REPO" \
+            --title "[$APP_NAME] Update image to $IMAGE_NAME" \
             --body "Automated update of image tag." \
-            --base "${{ inputs.branch }}" \
-            --head "update-image-${{ github.run_id }}")
+            --base "$BRANCH" \
+            --head "update-image-$RUN_ID")
 
           echo "PR created: $PR_URL"
 
-          gh pr merge "$PR_URL" --repo "${{ inputs.gitops_repo }}" --squash --delete-branch
+          gh pr merge "$PR_URL" --repo "$GITOPS_REPO" --squash --delete-branch
 
 
   sync-argocd:
@@ -94,10 +107,12 @@ jobs:
         env:
           ARGOCD_AUTH_TOKEN: ${{ secrets.argocd_auth_token }}
           ARGOCD_SERVER: ${{ inputs.argocd_server }}
+          APP_NAME: ${{ inputs.argocd_app_name }}
         run: |
           sudo curl -sSL -o /usr/local/bin/argocd \
             https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
           sudo chmod +x /usr/local/bin/argocd
 
-          argocd app sync ${{ inputs.argocd_app_name }} --insecure
-          argocd app wait ${{ inputs.argocd_app_name }} --insecure
+          argocd app sync "$APP_NAME" --insecure
+          argocd app wait "$APP_NAME" --insecure
+

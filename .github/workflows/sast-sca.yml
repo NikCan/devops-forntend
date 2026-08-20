@@ -1,0 +1,77 @@
+name: SAST / SCA scan
+
+on:
+  workflow_call:
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz \
+            -o gitleaks.tar.gz
+          tar -zxvf gitleaks.tar.gz
+          chmod +x gitleaks
+
+      - name: Run Gitleaks
+        run: |
+          ./gitleaks detect \
+            --source=. \
+            --config=.gitleaks.toml \
+            --verbose \
+            --redact \
+            --exit-code 1
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Show files
+        run: ls -la
+
+      - name: Run Semgrep scan
+        run: |
+          semgrep scan \
+            --config=p/typescript \
+            --config=p/react \
+            --config=p/owasp-top-ten \
+            --error \
+            src
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          mkdir -p ~/.local/bin/trivy-bin
+          curl -sL -o /tmp/trivy.tar.gz \
+            https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-64bit.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C ~/.local/bin/trivy-bin
+          chmod +x ~/.local/bin/trivy-bin/trivy
+          echo "$HOME/.local/bin/trivy-bin" >> $GITHUB_PATH
+
+      - name: Trivy (console)
+        run: |
+          trivy fs \
+            --scanners vuln \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            .

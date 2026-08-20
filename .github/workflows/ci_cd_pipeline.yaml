@@ -5,18 +5,24 @@ on:
     branches: [develop]
 
 jobs:
+  security:
+    name: SAST & SCA Scan
+    uses: ./.github/workflows/sast-sca.yml
+
   checks:
     name: Code Checks
     uses: ./.github/workflows/checks.yml
 
   build:
     name: Build Image
-    needs: [checks]
+    needs: [checks, security]
     uses: ./.github/workflows/build.yml
     with:
       image_name: "devops-frontend"
       vite_api_url: ${{ vars.VITE_API_URL }}
-    secrets: inherit
+    secrets:
+      DOCKER_USER: ${{ secrets.DOCKER_USER }}
+      DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
 
   deploy:
     name: Deploy to Production
@@ -42,4 +48,7 @@ jobs:
       checks_result: ${{ needs.checks.result }}
       build_result: ${{ needs.build.result }}
       deploy_result: ${{ needs.deploy.result }}
-    secrets: inherit
+    secrets:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
